@@ -38,9 +38,14 @@ def detect_injection(user_input: str) -> bool:
         True if injection detected, False otherwise
     """
     INJECTION_PATTERNS = [
-        # TODO: Add at least 5 regex patterns
-        # Example:
-        # r"ignore (all )?(previous|above) instructions",
+        r"ignore (all )?(previous|above|prior) instructions",
+        r"you are now (an? )?(unrestricted|dan|jailbroken)",
+        r"(reveal|show|print|output|translate|display) (your )?(system|internal|original)? (instructions|prompt|rules)",
+        r"pretend you are",
+        r"act as (a |an )?unrestricted",
+        r"system prompt",
+        r"bypass (safety|filters|guardrails)",
+        r"fill in the blank",
     ]
 
     for pattern in INJECTION_PATTERNS:
@@ -70,12 +75,23 @@ def topic_filter(user_input: str) -> bool:
     """
     input_lower = user_input.lower()
 
-    # TODO: Implement logic:
     # 1. If input contains any blocked topic -> return True
-    # 2. If input doesn't contain any allowed topic -> return True
-    # 3. Otherwise -> return False (allow)
+    for blocked in BLOCKED_TOPICS:
+        if blocked.lower() in input_lower:
+            return True
 
-    pass  # Replace with your implementation
+    # 2. We allow standard greetings to avoid false positives on basic conversation
+    greetings = ["hi", "hello", "xin chào", "xin chao", "chào", "chao", "hey", "good morning", "good afternoon"]
+    if len(input_lower.strip()) < 3:
+        return False
+        
+    has_allowed = any(allowed.lower() in input_lower for allowed in ALLOWED_TOPICS)
+    has_greeting = any(greet in input_lower for greet in greetings)
+    
+    if not (has_allowed or has_greeting):
+        return True
+
+    return False
 
 
 # ============================================================
@@ -128,14 +144,15 @@ class InputGuardrailPlugin(base_plugin.BasePlugin):
         self.total_count += 1
         text = self._extract_text(user_message)
 
-        # TODO: Implement logic:
-        # 1. Call detect_injection(text)
-        #    - If True: increment blocked_count, return self._block_response("...")
-        # 2. Call topic_filter(text)
-        #    - If True: increment blocked_count, return self._block_response("...")
-        # 3. If both are False: return None (let message through)
+        if detect_injection(text):
+            self.blocked_count += 1
+            return self._block_response("Request blocked: Prompt injection detected.")
 
-        pass  # Replace with your implementation
+        if topic_filter(text):
+            self.blocked_count += 1
+            return self._block_response("Request blocked: Off-topic or dangerous query.")
+
+        return None
 
 
 # ============================================================
